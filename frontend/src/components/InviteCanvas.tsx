@@ -201,6 +201,7 @@ function Draggable({
 }
 
 function BackgroundLayer({ invite }: { invite: Invite }) {
+  const [bgSize, setBgSize] = useState({ w: 0, h: 0 });
   const layout = invite.mosaicLayout;
   const imgs = invite.mosaicImages || [];
 
@@ -208,15 +209,23 @@ function BackgroundLayer({ invite }: { invite: Invite }) {
     const uri = invite.background || imgs[0];
     if (!uri) return <View style={styles.bgPlaceholder} />;
     return (
-      <View style={StyleSheet.absoluteFill}>
+      <View
+        style={StyleSheet.absoluteFill}
+        onLayout={(e) =>
+          setBgSize({
+            w: e.nativeEvent.layout.width,
+            h: e.nativeEvent.layout.height,
+          })
+        }
+      >
         <Image
           source={{ uri }}
           style={[
             StyleSheet.absoluteFill,
             {
               transform: [
-                { translateX: (invite.bgOffsetX || 0) * 200 },
-                { translateY: (invite.bgOffsetY || 0) * 200 },
+                { translateX: (invite.bgOffsetX || 0) * bgSize.w },
+                { translateY: (invite.bgOffsetY || 0) * bgSize.h },
                 { scale: invite.bgZoom || 1 },
               ],
             },
