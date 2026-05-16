@@ -1,0 +1,115 @@
+{
+  "theme": "Light",
+  "archetype": "Archetype 3 (Pastel & Soft) mixed with Archetype 1 (Organic & Earthy)",
+  "emotional_tone": "Celebratory, elegant, effortless, and premium. Usable for both formal weddings and casual birthdays.",
+  "colors": {
+    "background": "#FAF9F6",
+    "surface": "#FFFFFF",
+    "primary": "#E26D5A",
+    "primary_active": "#D35A47",
+    "text_primary": "#1A1A1A",
+    "text_secondary": "#6B7280",
+    "text_tertiary": "#9CA3AF",
+    "border": "#E5E7EB",
+    "overlay": "rgba(0, 0, 0, 0.3)",
+    "categories": {
+      "wedding": "#E5D9C5",
+      "birthday": "#FDE68A",
+      "baby_shower": "#A7F3D0",
+      "party": "#FBCFE8",
+      "corporate": "#BFDBFE",
+      "casual_meetup": "#FED7AA"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Playfair Display (via @expo-google-fonts/playfair-display)",
+      "body": "Manrope (via @expo-google-fonts/manrope)"
+    },
+    "sizes": {
+      "h1": 36,
+      "h2": 28,
+      "h3": 22,
+      "body_lg": 18,
+      "body": 16,
+      "caption": 14,
+      "tiny": 12
+    },
+    "guidelines": "Headings must use Playfair Display for a tasteful, premium feel. Body text uses Manrope for maximum legibility. Use tighter letter spacing for large headers."
+  },
+  "layout_and_spacing": {
+    "system": "Use an 8px base grid system (e.g., 8, 16, 24, 32, 40, 48).",
+    "cards": "Generous padding (24px). Border radius 20px or 24px for a soft, modern look. Soft drop shadows.",
+    "editor_canvas": "Centered, flex-1, taking up maximum available height above the bottom sheet toolbar. Should include a subtle border or card-like appearance.",
+    "bottom_sheet": "Border top radius of 24px, pure white background, strong top shadow, with a small drag indicator pill at the top center.",
+    "general": "Prioritize negative space. Never cram elements. Mobile-first layout emphasizing thumb reachability for primary actions."
+  },
+  "motion_and_interactions": {
+    "transitions": "Use LayoutAnimation or React Native Reanimated for smooth transitions when switching categories or opening the editor.",
+    "buttons": "Apply activeOpacity={0.7} on TouchableOpacity elements to provide tactile feedback.",
+    "editor_elements": "Allow basic dragging and scaling gestures if using a library, otherwise fixed center alignment with nice fade-in animation."
+  },
+  "testing_attributes": {
+    "rule": "All interactive and key informational elements MUST include a data-testid attribute.",
+    "examples": [
+      "data-testid='category-btn-wedding'",
+      "data-testid='editor-text-input'",
+      "data-testid='save-invite-btn'",
+      "data-testid='template-card'"
+    ]
+  },
+  "components": {
+    "TemplateCard": "ImageBackground with a dark gradient overlay at the bottom for text legibility. Title positioned bottom-left in Playfair Display.",
+    "CategoryPill": "Horizontal ScrollView. Active state uses primary color background with white text, inactive uses surface color with text_primary.",
+    "BottomToolbar": "Contains touchable icon buttons for 'Text', 'Background', 'Color', and 'AI Suggest'. Align icons evenly in a row.",
+    "EditorCanvas": "A designated View acting as the invite boundary. Contains an Image layer and absolute positioned Text layers that can be edited."
+  },
+  "media": {
+    "wedding": [
+      "https://images.unsplash.com/photo-1551468307-8c1e3c78013c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHwxfHxlbGVnYW50JTIwd2VkZGluZyUyMG1pbmltYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3ODk1MTYwNnww&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1551468188-4b8ed67c5bfa?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHwyfHxlbGVnYW50JTIwd2VkZGluZyUyMG1pbmltYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3ODk1MTYwNnww&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1551546897-0cf94d9bb428?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHwzfHxlbGVnYW50JTIwd2VkZGluZyUyMG1pbmltYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3ODk1MTYwNnww&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1551468220-0a25172193f9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHw0fHxlbGVnYW50JTIwd2VkZGluZyUyMG1pbmltYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3ODk1MTYwNnww&ixlib=rb-4.1.0&q=85"
+    ],
+    "birthday": [
+      "https://images.unsplash.com/photo-1767070805937-de496d694419?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MDV8MHwxfHNlYXJjaHw0fHxiaXJ0aGRheSUyMHBhcnR5JTIwYmFsbG9vbnMlMjBhZXN0aGV0aWN8ZW58MHx8fHwxNzc4OTUxNjA3fDA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1604668915840-580c30026e5f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MDV8MHwxfHNlYXJjaHwxfHxiaXJ0aGRheSUyMHBhcnR5JTIwYmFsbG9vbnMlMjBhZXN0aGV0aWN8ZW58MHx8fHwxNzc4OTUxNjA3fDA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1595678816463-f94d2070f0a3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MDV8MHwxfHNlYXJjaHwyfHxiaXJ0aGRheSUyMHBhcnR5JTIwYmFsbG9vbnMlMjBhZXN0aGV0aWN8ZW58MHx8fHwxNzc4OTUxNjA3fDA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1595678816444-12382c333081?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MDV8MHwxfHNlYXJjaHwzfHxiaXJ0aGRheSUyMHBhcnR5JTIwYmFsbG9vbnMlMjBhZXN0aGV0aWN8ZW58MHx8fHwxNzc4OTUxNjA3fDA&ixlib=rb-4.1.0&q=85"
+    ],
+    "baby_shower": [
+      "https://images.unsplash.com/photo-1579546928686-286c9fbde1ec?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwxfHxiYWJ5JTIwc2hvd2VyJTIwY3V0ZSUyMHBhc3RlbCUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc4OTUxNjA3fDA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1614853035846-77b0a40a6b5c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwyfHxiYWJ5JTIwc2hvd2VyJTIwY3V0ZSUyMHBhc3RlbCUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc4OTUxNjA3fDA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1770780604844-5ec3d63ed15a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwzfHxiYWJ5JTIwc2hvd2VyJTIwY3V0ZSUyMHBhc3RlbCUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc4OTUxNjA3fDA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1628699265231-97b2a3e7b9ae?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHw0fHxiYWJ5JTIwc2hvd2VyJTIwY3V0ZSUyMHBhc3RlbCUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc4OTUxNjA3fDA&ixlib=rb-4.1.0&q=85"
+    ],
+    "party": [
+      "https://images.unsplash.com/photo-1545128485-c400e7702796?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTV8MHwxfHNlYXJjaHwxfHxuaWdodCUyMGNsdWIlMjBwYXJ0eSUyMGFlc3RoZXRpYyUyMGxpZ2h0c3xlbnwwfHx8fDE3Nzg5NTE2MDd8MA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1687511844598-165c1fc387cc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTV8MHwxfHNlYXJjaHwyfHxuaWdodCUyMGNsdWIlMjBwYXJ0eSUyMGFlc3RoZXRpYyUyMGxpZ2h0c3xlbnwwfHx8fDE3Nzg5NTE2MDd8MA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1574154894072-18ba0d48321b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTV8MHwxfHNlYXJjaHwzfHxuaWdodCUyMGNsdWIlMjBwYXJ0eSUyMGFlc3RoZXRpYyUyMGxpZ2h0c3xlbnwwfHx8fDE3Nzg5NTE2MDd8MA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1713450605268-5f8ba67f5b55?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTV8MHwxfHNlYXJjaHw0fHxuaWdodCUyMGNsdWIlMjBwYXJ0eSUyMGFlc3RoZXRpYyUyMGxpZ2h0c3xlbnwwfHx8fDE3Nzg5NTE2MDd8MA&ixlib=rb-4.1.0&q=85"
+    ],
+    "corporate": [
+      "https://images.unsplash.com/photo-1510511233900-1982d92bd835?crop=entropy&cs=srgb&fm=jpg&ixid=M3w8NTYxOTB8MHwxfHNlYXJjaHwzfHxjb3Jwb3JhdGUlMjBldmVudCUyMHByb2Zlc3Npb25hbCUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc4OTUxNjA3fDA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1531058020387-3be344556be6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w8NTYxOTB8MHwxfHNlYXJjaHwxfHxjb3Jwb3JhdGUlMjBldmVudCUyMHByb2Zlc3Npb25hbCUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc4OTUxNjA3fDA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1700514077430-3659e38eb5e7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w8NTYxOTB8MHwxfHNlYXJjaHw0fHxjb3Jwb3JhdGUlMjBldmVudCUyMHByb2Zlc3Npb25hbCUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc4OTUxNjA3fDA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1653821355736-0c2598d0a63e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w8NTYxOTB8MHwxfHNlYXJjaHwyfHxjb3Jwb3JhdGUlMjBldmVudCUyMHByb2Zlc3Npb25hbCUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc4OTUxNjA3fDA&ixlib=rb-4.1.0&q=85"
+    ],
+    "casual_meetup": [
+      "https://images.unsplash.com/photo-1722077905962-da47b8f44d9d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzl8MHwxfHNlYXJjaHwzfHxjYXN1YWwlMjBtZWV0dXAlMjBjb2ZmZWUlMjBmcmllbmRzJTIwYWVzdGhldGljfGVufDB8fHx8MTc3ODk1MTYwN3ww&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1759960034444-99fc2da398bc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzl8MHwxfHNlYXJjaHwyfHxjYXN1YWwlMjBtZWV0dXAlMjBjb2ZmZWUlMjBmcmllbmRzJTIwYWVzdGhldGljfGVufDB8fHx8MTc3ODk1MTYwN3ww&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1778594189841-f50f23773d54?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzl8MHwxfHNlYXJjaHwxfHxjYXN1YWwlMjBtZWV0dXAlMjBjb2ZmZWUlMjBmcmllbmRzJTIwYWVzdGhldGljfGVufDB8fHx8MTc3ODk1MTYwN3ww&ixlib=rb-4.1.0&q=85"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "You are building a React Native Expo application. Produce .js files.",
+    "Do NOT use HTML/web components. Use standard React Native components: View, Text, ScrollView, TouchableOpacity, Image, ImageBackground, StyleSheet.",
+    "Store invites locally using AsyncStorage.",
+    "Use expo-sharing for the save/share functionality.",
+    "Use expo-image-picker for the 'import from device gallery' functionality.",
+    "Integrate the FastAPI backend solely for AI text suggestion endpoints.",
+    "Implement the UI directly using StyleSheet with the defined hex colors and spacing guidelines, or NativeWind if configured in the Expo setup.",
+    "Ensure the layout is responsive for mobile dimensions (no fixed absolute widths where flex or percentages fit better).",
+    "Ensure all user-interactable and visual distinct elements include `data-testid` properties (e.g., testID='save-invite-btn' for React Native)."
+  ]
+}
