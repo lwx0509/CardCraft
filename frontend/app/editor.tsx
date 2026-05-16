@@ -25,7 +25,7 @@ import {
   TEXT_COLORS,
   type Category,
 } from "@/src/constants/templates";
-import { type Invite } from "@/src/types/invite";
+import { type Invite, FONT_OPTIONS, type FontChoice } from "@/src/types/invite";
 import {
   getInvite,
   makeId,
@@ -59,6 +59,10 @@ export default function Editor() {
     location: "",
     background: "",
     textColor: "#FFFFFF",
+    titleFont: "playfair",
+    textOffsetX: 0,
+    textOffsetY: 0,
+    paid: false,
     createdAt: 0,
     updatedAt: 0,
   });
@@ -205,8 +209,23 @@ export default function Editor() {
         >
           {/* Canvas */}
           <View style={styles.canvasWrap} testID="editor-canvas-wrap">
-            <InviteCanvas invite={invite} />
+            <InviteCanvas
+              invite={invite}
+              draggable
+              onOffsetChange={(x, y) => {
+                setInvite((prev) => ({
+                  ...prev,
+                  textOffsetX: x,
+                  textOffsetY: y,
+                  updatedAt: Date.now(),
+                }));
+              }}
+            />
           </View>
+
+          <Text style={styles.dragHint}>
+            Tip: drag the text to reposition it
+          </Text>
 
           {/* Category chip */}
           <View style={[styles.catChip, { backgroundColor: headerColor }]}>
@@ -363,6 +382,50 @@ export default function Editor() {
             </View>
           )}
 
+          {tool === "font" && (
+            <View style={styles.panel} testID="panel-font">
+              <Text style={styles.panelTitle}>Title font</Text>
+              {FONT_OPTIONS.map((f) => {
+                const active = invite.titleFont === f.id;
+                return (
+                  <TouchableOpacity
+                    key={f.id}
+                    onPress={() => set("titleFont", f.id as FontChoice)}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.fontRow,
+                      active && styles.fontRowActive,
+                    ]}
+                    testID={`font-${f.id}`}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: f.family,
+                        fontSize: 24,
+                        color: "#1A1A1A",
+                      }}
+                    >
+                      {invite.title || "Sample title"}
+                    </Text>
+                    <Text style={styles.fontLabel}>{f.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity
+                style={[styles.actionBtn, { marginTop: 12 }]}
+                onPress={() => {
+                  set("textOffsetX", 0);
+                  set("textOffsetY", 0);
+                }}
+                testID="reset-position-btn"
+                activeOpacity={0.7}
+              >
+                <Ionicons name="refresh" size={16} color="#1A1A1A" />
+                <Text style={styles.actionBtnText}>Reset text position</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {tool === "ai" && (
             <View style={styles.panel} testID="panel-ai">
               <Text style={styles.panelTitle}>AI helpers</Text>
@@ -425,6 +488,13 @@ export default function Editor() {
             active={tool === "color"}
             onPress={() => setTool("color")}
             testID="tool-color"
+          />
+          <ToolBtn
+            icon="text-outline"
+            label="Font"
+            active={tool === "font"}
+            onPress={() => setTool("font")}
+            testID="tool-font"
           />
           <ToolBtn
             icon="sparkles-outline"
@@ -649,6 +719,35 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   colorDotActive: { borderColor: "#1A1A1A", borderWidth: 3 },
+  dragHint: {
+    fontFamily: "Manrope_500Medium",
+    fontSize: 12,
+    color: "#9CA3AF",
+    textAlign: "center",
+    marginBottom: 12,
+    marginTop: -6,
+  },
+  fontRow: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: "#FAF9F6",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginBottom: 8,
+  },
+  fontRowActive: {
+    borderColor: "#E26D5A",
+    backgroundColor: "#FFF4F1",
+  },
+  fontLabel: {
+    fontFamily: "Manrope_500Medium",
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 4,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
   toolbar: {
     flexDirection: "row",
     alignItems: "center",
@@ -689,4 +788,3 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
-

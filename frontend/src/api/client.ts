@@ -43,3 +43,45 @@ export async function generateBackground(
   }
   return res.json();
 }
+
+// ---------- Payments ----------
+export type CreateSessionResponse = {
+  checkout_url: string;
+  session_id: string;
+};
+
+export async function createCheckoutSession(args: {
+  invite_id: string;
+  success_url: string;
+  cancel_url: string;
+}): Promise<CreateSessionResponse> {
+  const res = await fetch(`${BASE}/api/payments/create-checkout-session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(args),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`create-session failed: ${res.status} ${t}`);
+  }
+  return res.json();
+}
+
+export type PaymentStatus = {
+  invite_id: string;
+  paid: boolean;
+  status: string;
+  session_id?: string;
+};
+
+export async function getPaymentStatus(invite_id: string): Promise<PaymentStatus> {
+  const res = await fetch(`${BASE}/api/payments/status/${encodeURIComponent(invite_id)}`);
+  if (!res.ok) throw new Error(`status failed: ${res.status}`);
+  return res.json();
+}
+
+export async function syncSession(session_id: string): Promise<PaymentStatus> {
+  const res = await fetch(`${BASE}/api/payments/sync/${encodeURIComponent(session_id)}`);
+  if (!res.ok) throw new Error(`sync failed: ${res.status}`);
+  return res.json();
+}

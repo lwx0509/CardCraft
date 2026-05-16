@@ -11,6 +11,8 @@ import {
   Manrope_500Medium,
   Manrope_600SemiBold,
 } from "@expo-google-fonts/manrope";
+import { DMSerifDisplay_400Regular } from "@expo-google-fonts/dm-serif-display";
+import { DancingScript_700Bold } from "@expo-google-fonts/dancing-script";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -21,6 +23,8 @@ export default function RootLayout() {
     Manrope_400Regular,
     Manrope_500Medium,
     Manrope_600SemiBold,
+    DMSerifDisplay_400Regular,
+    DancingScript_700Bold,
   });
 
   const onReady = useCallback(() => {

@@ -1,19 +1,36 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Request
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional
 import uuid
+from datetime import datetime, timezone
 
+import stripe
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.payments.stripe.checkout import (
+    StripeCheckout,
+    CheckoutSessionRequest,
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
+INVITE_PRICE_USD = 9.99
+
+stripe_checkout: Optional[StripeCheckout] = None
+if STRIPE_API_KEY:
+    stripe_checkout = StripeCheckout(
+        api_key=STRIPE_API_KEY,
+        webhook_secret=STRIPE_WEBHOOK_SECRET or None,
+    )
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,13 +38,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Mongo
+mongo_url = os.environ['MONGO_URL']
+mongo_client = AsyncIOMotorClient(mongo_url)
+db = mongo_client[os.environ['DB_NAME']]
+
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
 
-# ---------- Models ----------
+# ---------- AI Models ----------
 class SuggestTextRequest(BaseModel):
-    category: str = Field(..., description="Event category, e.g. wedding, birthday")
+    category: str
     event_name: Optional[str] = ""
     host: Optional[str] = ""
     date: Optional[str] = ""
@@ -50,7 +72,26 @@ class GenerateBackgroundResponse(BaseModel):
     mime_type: str
 
 
-# ---------- Routes ----------
+# ---------- Payment Models ----------
+class CreateSessionRequest(BaseModel):
+    invite_id: str
+    success_url: str = Field(..., description="Frontend URL to redirect on success")
+    cancel_url: str = Field(..., description="Frontend URL to redirect on cancel")
+
+
+class CreateSessionResponse(BaseModel):
+    checkout_url: str
+    session_id: str
+
+
+class PaymentStatusResponse(BaseModel):
+    invite_id: str
+    paid: bool
+    status: str
+    session_id: Optional[str] = None
+
+
+# ---------- AI Routes ----------
 @api_router.get("/")
 async def root():
     return {"message": "Invite Maker API"}
@@ -58,7 +99,11 @@ async def root():
 
 @api_router.get("/health")
 async def health():
-    return {"status": "ok", "llm_key_configured": bool(EMERGENT_LLM_KEY)}
+    return {
+        "status": "ok",
+        "llm_key_configured": bool(EMERGENT_LLM_KEY),
+        "stripe_configured": bool(stripe_checkout),
+    }
 
 
 @api_router.post("/ai/suggest-text", response_model=SuggestTextResponse)
@@ -151,6 +196,123 @@ async def generate_background(req: GenerateBackgroundRequest):
         raise HTTPException(status_code=500, detail=f"Image generation failed: {str(e)}")
 
 
+# ---------- Payment Routes ----------
+async def _mark_paid(invite_id: str, session_id: str) -> None:
+    await db.paid_invites.update_one(
+        {"invite_id": invite_id},
+        {
+            "$set": {
+                "invite_id": invite_id,
+                "status": "paid",
+                "session_id": session_id,
+                "paid_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+        upsert=True,
+    )
+
+
+@api_router.post("/payments/create-checkout-session", response_model=CreateSessionResponse)
+async def create_checkout_session(req: CreateSessionRequest):
+    if not stripe_checkout:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+
+    existing = await db.paid_invites.find_one({"invite_id": req.invite_id})
+    if existing and existing.get("status") == "paid":
+        raise HTTPException(status_code=400, detail="Invite already paid")
+
+    sep = "&" if "?" in req.success_url else "?"
+    success_url = (
+        f"{req.success_url}{sep}session_id={{CHECKOUT_SESSION_ID}}"
+        f"&invite_id={req.invite_id}"
+    )
+
+    try:
+        session = await stripe_checkout.create_checkout_session(
+            CheckoutSessionRequest(
+                amount=INVITE_PRICE_USD,
+                currency="usd",
+                success_url=success_url,
+                cancel_url=req.cancel_url,
+                metadata={"invite_id": req.invite_id},
+            )
+        )
+        await db.paid_invites.update_one(
+            {"invite_id": req.invite_id},
+            {
+                "$set": {
+                    "invite_id": req.invite_id,
+                    "status": "pending",
+                    "session_id": session.session_id,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+            },
+            upsert=True,
+        )
+        return CreateSessionResponse(checkout_url=session.url, session_id=session.session_id)
+    except Exception as e:
+        logger.error(f"create_checkout_session error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/payments/status/{invite_id}", response_model=PaymentStatusResponse)
+async def payment_status(invite_id: str):
+    doc = await db.paid_invites.find_one({"invite_id": invite_id}, {"_id": 0})
+    if not doc:
+        return PaymentStatusResponse(invite_id=invite_id, paid=False, status="unpaid")
+    return PaymentStatusResponse(
+        invite_id=invite_id,
+        paid=doc.get("status") == "paid",
+        status=doc.get("status", "unpaid"),
+        session_id=doc.get("session_id"),
+    )
+
+
+@api_router.get("/payments/sync/{session_id}", response_model=PaymentStatusResponse)
+async def sync_session(session_id: str):
+    if not stripe_checkout:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+    try:
+        status = await stripe_checkout.get_checkout_status(session_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    invite_id = (status.metadata or {}).get("invite_id")
+    if not invite_id:
+        raise HTTPException(status_code=400, detail="Session missing invite_id metadata")
+
+    if status.payment_status == "paid":
+        await _mark_paid(invite_id, session_id)
+        return PaymentStatusResponse(
+            invite_id=invite_id, paid=True, status="paid", session_id=session_id
+        )
+    return PaymentStatusResponse(
+        invite_id=invite_id,
+        paid=False,
+        status=status.payment_status or "pending",
+        session_id=session_id,
+    )
+
+
+@api_router.post("/webhooks/stripe")
+async def stripe_webhook(request: Request):
+    if not stripe_checkout:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    try:
+        event = await stripe_checkout.handle_webhook(payload, sig)
+    except Exception as e:
+        logger.error(f"webhook error: {e}")
+        raise HTTPException(status_code=400, detail="Invalid webhook")
+
+    if event.event_type == "checkout.session.completed" and event.payment_status == "paid":
+        invite_id = (event.metadata or {}).get("invite_id")
+        if invite_id:
+            await _mark_paid(invite_id, event.session_id or "")
+    return {"received": True}
+
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -160,3 +322,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    mongo_client.close()
