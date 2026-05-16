@@ -25,7 +25,7 @@ import {
   TEXT_COLORS,
   type Category,
 } from "@/src/constants/templates";
-import { type Invite, FONT_OPTIONS, type FontChoice } from "@/src/types/invite";
+import { type Invite, FONT_OPTIONS, type FontChoice, defaultPositions, MOSAIC_LAYOUTS, type MosaicLayout, type BgFit } from "@/src/types/invite";
 import {
   getInvite,
   makeId,
@@ -33,7 +33,7 @@ import {
 } from "@/src/store/invites";
 import { suggestText, generateBackground } from "@/src/api/client";
 
-type Tool = "text" | "background" | "color" | "font" | "ai";
+type Tool = "text" | "background" | "color" | "font" | "layout" | "ai";
 
 export default function Editor() {
   const router = useRouter();
@@ -58,10 +58,15 @@ export default function Editor() {
     date: "",
     location: "",
     background: "",
+    mosaicImages: [],
+    mosaicLayout: "single",
+    bgFit: "cover",
+    bgZoom: 1,
+    bgOffsetX: 0,
+    bgOffsetY: 0,
     textColor: "#FFFFFF",
     titleFont: "playfair",
-    textOffsetX: 0,
-    textOffsetY: 0,
+    positions: defaultPositions(),
     paid: false,
     createdAt: 0,
     updatedAt: 0,
@@ -89,7 +94,16 @@ export default function Editor() {
         location: "",
         background:
           String(params.background || "") || TEMPLATE_IMAGES[cat][0],
+        mosaicImages: [],
+        mosaicLayout: "single",
+        bgFit: "cover",
+        bgZoom: 1,
+        bgOffsetX: 0,
+        bgOffsetY: 0,
         textColor: "#FFFFFF",
+        titleFont: "playfair",
+        positions: defaultPositions(),
+        paid: false,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
@@ -126,6 +140,33 @@ export default function Editor() {
         ? `data:${a.mimeType || "image/jpeg"};base64,${a.base64}`
         : a.uri;
       set("background", uri);
+    }
+  };
+
+  const onPickMosaicImages = async (slots: number) => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission required", "Photo library access is needed.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+      base64: true,
+      allowsMultipleSelection: true,
+      selectionLimit: slots,
+    });
+    if (!result.canceled && result.assets?.length) {
+      const uris = result.assets.slice(0, slots).map((a) =>
+        a.base64
+          ? `data:${a.mimeType || "image/jpeg"};base64,${a.base64}`
+          : a.uri,
+      );
+      setInvite((prev) => ({
+        ...prev,
+        mosaicImages: uris,
+        updatedAt: Date.now(),
+      }));
     }
   };
 
@@ -212,11 +253,10 @@ export default function Editor() {
             <InviteCanvas
               invite={invite}
               draggable
-              onOffsetChange={(x, y) => {
+              onPositionChange={(key, p) => {
                 setInvite((prev) => ({
                   ...prev,
-                  textOffsetX: x,
-                  textOffsetY: y,
+                  positions: { ...prev.positions, [key]: p },
                   updatedAt: Date.now(),
                 }));
               }}
@@ -224,7 +264,7 @@ export default function Editor() {
           </View>
 
           <Text style={styles.dragHint}>
-            Tip: drag the text to reposition it
+            Tip: drag any text on the invite to move it
           </Text>
 
           {/* Category chip */}
@@ -414,15 +454,190 @@ export default function Editor() {
               <TouchableOpacity
                 style={[styles.actionBtn, { marginTop: 12 }]}
                 onPress={() => {
-                  set("textOffsetX", 0);
-                  set("textOffsetY", 0);
+                  set("positions", {
+                    title: { x: 0, y: -0.05 },
+                    message: { x: 0, y: 0.08 },
+                    meta: { x: 0, y: 0.28 },
+                  });
                 }}
                 testID="reset-position-btn"
                 activeOpacity={0.7}
               >
                 <Ionicons name="refresh" size={16} color="#1A1A1A" />
-                <Text style={styles.actionBtnText}>Reset text position</Text>
+                <Text style={styles.actionBtnText}>Reset text positions</Text>
               </TouchableOpacity>
+            </View>
+          )}
+
+          {tool === "layout" && (
+            <View style={styles.panel} testID="panel-layout">
+              <Text style={styles.panelTitle}>Photo mosaic</Text>
+              <View style={styles.layoutRow}>
+                {MOSAIC_LAYOUTS.map((l) => (
+                  <TouchableOpacity
+                    key={l.id}
+                    onPress={() => {
+                      set("mosaicLayout", l.id as MosaicLayout);
+                      if (l.id === "single") {
+                        setInvite((prev) => ({
+                          ...prev,
+                          mosaicImages: [],
+                          updatedAt: Date.now(),
+                        }));
+                      }
+                    }}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.layoutChip,
+                      invite.mosaicLayout === l.id && styles.layoutChipActive,
+                    ]}
+                    testID={`mosaic-layout-${l.id}`}
+                  >
+                    <LayoutPreview layout={l.id as MosaicLayout} />
+                    <Text style={styles.layoutLabel}>{l.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {invite.mosaicLayout !== "single" && (
+                <>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.actionBtnPrimary, { marginTop: 14 }]}
+                    onPress={() =>
+                      onPickMosaicImages(
+                        MOSAIC_LAYOUTS.find((m) => m.id === invite.mosaicLayout)
+                          ?.slots || 2,
+                      )
+                    }
+                    activeOpacity={0.85}
+                    testID="pick-mosaic-btn"
+                  >
+                    <Ionicons name="images-outline" size={18} color="#FFFFFF" />
+                    <Text style={[styles.actionBtnText, { color: "#FFFFFF" }]}>
+                      Pick photos for mosaic
+                    </Text>
+                  </TouchableOpacity>
+                  {invite.mosaicImages.length > 0 && (
+                    <Text style={styles.helpText}>
+                      {invite.mosaicImages.length} photo
+                      {invite.mosaicImages.length === 1 ? "" : "s"} selected
+                    </Text>
+                  )}
+                </>
+              )}
+
+              <Text style={[styles.panelTitle, { marginTop: 22 }]}>Adjust background</Text>
+              <Text style={styles.helpText}>
+                Applies to the single background image.
+              </Text>
+
+              <View style={[styles.actionRow, { marginTop: 10 }]}>
+                {(["cover", "contain"] as BgFit[]).map((f) => (
+                  <TouchableOpacity
+                    key={f}
+                    onPress={() => set("bgFit", f)}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.actionBtn,
+                      invite.bgFit === f && styles.actionBtnPrimary,
+                    ]}
+                    testID={`bgfit-${f}`}
+                  >
+                    <Text
+                      style={[
+                        styles.actionBtnText,
+                        invite.bgFit === f && { color: "#FFFFFF" },
+                      ]}
+                    >
+                      {f === "cover" ? "Cover (fill)" : "Contain (fit)"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[styles.subLabel, { marginTop: 16 }]}>Zoom</Text>
+              <View style={styles.zoomRow}>
+                {[1, 1.25, 1.5, 1.75, 2, 2.5].map((z) => (
+                  <TouchableOpacity
+                    key={z}
+                    onPress={() => set("bgZoom", z)}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.zoomChip,
+                      invite.bgZoom === z && styles.zoomChipActive,
+                    ]}
+                    testID={`bg-zoom-${z}`}
+                  >
+                    <Text
+                      style={[
+                        styles.zoomChipText,
+                        invite.bgZoom === z && { color: "#FFFFFF" },
+                      ]}
+                    >
+                      {z}x
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[styles.subLabel, { marginTop: 16 }]}>Nudge position</Text>
+              <View style={styles.nudgeGrid}>
+                <View style={{ flex: 1 }} />
+                <TouchableOpacity
+                  style={styles.nudgeBtn}
+                  onPress={() =>
+                    set("bgOffsetY", Math.max(-0.5, invite.bgOffsetY - 0.1))
+                  }
+                  testID="nudge-up"
+                >
+                  <Ionicons name="chevron-up" size={20} color="#1A1A1A" />
+                </TouchableOpacity>
+                <View style={{ flex: 1 }} />
+              </View>
+              <View style={styles.nudgeGrid}>
+                <TouchableOpacity
+                  style={styles.nudgeBtn}
+                  onPress={() =>
+                    set("bgOffsetX", Math.max(-0.5, invite.bgOffsetX - 0.1))
+                  }
+                  testID="nudge-left"
+                >
+                  <Ionicons name="chevron-back" size={20} color="#1A1A1A" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.nudgeBtn}
+                  onPress={() => {
+                    set("bgOffsetX", 0);
+                    set("bgOffsetY", 0);
+                    set("bgZoom", 1);
+                  }}
+                  testID="nudge-reset"
+                >
+                  <Ionicons name="locate-outline" size={20} color="#1A1A1A" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.nudgeBtn}
+                  onPress={() =>
+                    set("bgOffsetX", Math.min(0.5, invite.bgOffsetX + 0.1))
+                  }
+                  testID="nudge-right"
+                >
+                  <Ionicons name="chevron-forward" size={20} color="#1A1A1A" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.nudgeGrid}>
+                <View style={{ flex: 1 }} />
+                <TouchableOpacity
+                  style={styles.nudgeBtn}
+                  onPress={() =>
+                    set("bgOffsetY", Math.min(0.5, invite.bgOffsetY + 0.1))
+                  }
+                  testID="nudge-down"
+                >
+                  <Ionicons name="chevron-down" size={20} color="#1A1A1A" />
+                </TouchableOpacity>
+                <View style={{ flex: 1 }} />
+              </View>
             </View>
           )}
 
@@ -495,6 +710,13 @@ export default function Editor() {
             active={tool === "font"}
             onPress={() => setTool("font")}
             testID="tool-font"
+          />
+          <ToolBtn
+            icon="grid-outline"
+            label="Layout"
+            active={tool === "layout"}
+            onPress={() => setTool("layout")}
+            testID="tool-layout"
           />
           <ToolBtn
             icon="sparkles-outline"
@@ -576,6 +798,51 @@ function ToolBtn(props: {
     </TouchableOpacity>
   );
 }
+
+function LayoutPreview({ layout }: { layout: MosaicLayout }) {
+  const cell = { backgroundColor: "#1A1A1A", flex: 1, margin: 1 };
+  if (layout === "single") {
+    return <View style={[layoutPreviewStyles.box, cell]} />;
+  }
+  if (layout === "split_h") {
+    return (
+      <View style={[layoutPreviewStyles.box, { flexDirection: "row" }]}>
+        <View style={cell} />
+        <View style={cell} />
+      </View>
+    );
+  }
+  if (layout === "split_v") {
+    return (
+      <View style={layoutPreviewStyles.box}>
+        <View style={cell} />
+        <View style={cell} />
+      </View>
+    );
+  }
+  return (
+    <View style={layoutPreviewStyles.box}>
+      <View style={{ flex: 1, flexDirection: "row" }}>
+        <View style={cell} />
+        <View style={cell} />
+      </View>
+      <View style={{ flex: 1, flexDirection: "row" }}>
+        <View style={cell} />
+        <View style={cell} />
+      </View>
+    </View>
+  );
+}
+
+const layoutPreviewStyles = StyleSheet.create({
+  box: {
+    width: 44,
+    height: 44,
+    borderRadius: 6,
+    backgroundColor: "#EEE",
+    overflow: "hidden",
+  },
+});
 
 function InviteCanvasThumb({ uri }: { uri: string }) {
   return (
@@ -747,6 +1014,63 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textTransform: "uppercase",
     letterSpacing: 1,
+  },
+  layoutRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  layoutChip: {
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: "#FAF9F6",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginRight: 8,
+    marginBottom: 8,
+    gap: 6,
+  },
+  layoutChipActive: { borderColor: "#E26D5A", backgroundColor: "#FFF4F1" },
+  layoutLabel: {
+    fontFamily: "Manrope_500Medium",
+    fontSize: 11,
+    color: "#1A1A1A",
+  },
+  zoomRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  zoomChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  zoomChipActive: { backgroundColor: "#1A1A1A", borderColor: "#1A1A1A" },
+  zoomChipText: {
+    fontFamily: "Manrope_600SemiBold",
+    fontSize: 12,
+    color: "#1A1A1A",
+  },
+  nudgeGrid: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 6,
+  },
+  nudgeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
   },
   toolbar: {
     flexDirection: "row",
