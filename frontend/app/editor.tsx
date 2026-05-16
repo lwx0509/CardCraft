@@ -33,7 +33,7 @@ import {
 } from "@/src/store/invites";
 import { suggestText, generateBackground } from "@/src/api/client";
 
-type Tool = "text" | "background" | "color" | "ai";
+type Tool = "text" | "background" | "color" | "font" | "ai";
 
 export default function Editor() {
   const router = useRouter();
