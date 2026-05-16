@@ -27,8 +27,10 @@ A React Native Expo mobile app that lets users craft custom event invitations fr
 - Edit title, message, host, date, location
 - Background: stock per category, device gallery, AI generate
 - 8 text colors
-- **Font picker** — Playfair Display (elegant), DM Serif Display (modern), Dancing Script (handwritten)
-- **Free-drag text positioning** on the canvas (PanResponder, normalized -0.4..0.4 offsets)
+- **Font picker** — Playfair Display, DM Serif Display, Dancing Script
+- **Per-element drag** — title, message, and meta (date+location) blocks are independently draggable on the canvas (PanResponder + Animated, normalized −0.45..0.45 offsets persisted in `positions`)
+- **Photo mosaic** — pick 2–4 device photos and arrange as: single, side-by-side (split_h), top/bottom (split_v), or 2×2 grid
+- **Background image fit** — cover/contain toggle, zoom 1×–2.5×, X/Y nudge (with reset)
 - AI suggest text + AI generate background
 
 ## Preview / Payment / Share
