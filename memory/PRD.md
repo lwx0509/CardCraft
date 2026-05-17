@@ -33,11 +33,17 @@ A React Native Expo mobile app that lets users craft custom event invitations fr
 - **Background image fit** — cover/contain toggle, zoom 1×–2.5×, X/Y nudge (with reset)
 - AI suggest text + AI generate background
 
-## Preview / Payment / Share
-- Always-on "Made with Invite Studio" attribution footer on the rendered invite
-- Free preview; locked banner shows "$9.99 to unlock save & share"
-- Tap "Unlock for $9.99" → backend creates Stripe Checkout session → app opens it via `expo-web-browser` (or `window.location.href` on web) → on return app polls `/api/payments/sync/{session_id}` then `/api/payments/status/{invite_id}` → on `paid:true`, persists `paid` flag locally and unlocks Save/Share buttons.
-- Save → `expo-media-library`. Share → `expo-sharing`.
+## Web / PWA
+
+The Expo app builds to a polished web experience that is also installable as a Progressive Web App (no app store needed).
+
+- **Responsive home**: 4-column gallery on desktop (≥1080px), 3 cols on tablet (≥768px), 2 cols on mobile. Content capped at max-width 1200 and centered.
+- **Responsive preview**: 2-column layout (canvas left, side panel right) at ≥900px; single-column below.
+- **Editor**: capped at 640px width and centered on desktop.
+- **PWA manifest**: inlined as a `data:application/manifest+json` URI in `+html.tsx` (no static-file pipeline dependency) with `display: standalone`, theme color `#E26D5A`, background `#FAF9F6`, name "Invite Studio".
+- **Service worker**: `/app/frontend/public/sw.js` (served at `/sw.js`) — network-first navigation handler, satisfies the browser's "installable PWA" criteria.
+- **Install banner** (home): listens for `beforeinstallprompt` and shows an "Install" CTA; tapping triggers the native "Add to Home Screen" / "Install App" prompt — no app store visit required.
+- **Web-native save/share** (preview): `navigator.share({ files: [...] })` when available, falls back to a plain `<a download>` link that downloads the PNG directly. Mobile builds continue to use `expo-sharing` + `expo-media-library`.
 
 ## Stripe configuration
 - Test key `sk_test_emergent` from pod env, routed via `emergentintegrations.payments.stripe.checkout.StripeCheckout`, which proxies to `https://integrations.emergentagent.com/stripe`. No real card is charged.

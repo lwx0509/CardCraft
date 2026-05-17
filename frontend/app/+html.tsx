@@ -36,14 +36,9 @@ const PWA_REGISTER = `
 (function() {
   try {
     if ('serviceWorker' in navigator) {
-      // Minimal inline service worker via Blob — caches the app shell so the
-      // installed PWA opens instantly on next visit, and gives the browser the
-      // signal it needs to show the "Install App" prompt.
-      var sw = "self.addEventListener('install',function(e){self.skipWaiting();});" +
-               "self.addEventListener('activate',function(e){e.waitUntil(self.clients.claim());});" +
-               "self.addEventListener('fetch',function(e){});";
-      var blob = new Blob([sw], { type: 'application/javascript' });
-      navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(function(){});
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js').catch(function(){});
+      });
     }
   } catch (e) { /* noop */ }
 })();
