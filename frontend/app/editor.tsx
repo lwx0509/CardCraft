@@ -859,7 +859,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FAF9F6",
   },
   scroll: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 24 },
+  scrollContent: { padding: 20, paddingBottom: 24, maxWidth: 640, alignSelf: "center", width: "100%" },
   canvasWrap: {
     borderRadius: 22,
     overflow: "hidden",

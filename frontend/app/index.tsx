@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ImageBackground,
   StatusBar,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -19,10 +20,18 @@ import {
   PRESET_MESSAGES,
   type Category,
 } from "@/src/constants/templates";
+import { useInstallPrompt } from "@/src/utils/pwa";
 
 export default function Home() {
   const router = useRouter();
   const [active, setActive] = useState<Category>("birthday");
+  const { width } = useWindowDimensions();
+  const { available: installAvailable, installed, promptInstall } = useInstallPrompt();
+  const [installDismissed, setInstallDismissed] = useState(false);
+
+  // Responsive: 2 cols up to 640, 3 up to 960, 4 above
+  const cols = width >= 1080 ? 4 : width >= 768 ? 3 : 2;
+  const tplCardWidth = `${(100 - (cols - 1) * 1.5) / cols}%` as `${number}%`;
 
   const templates = useMemo(() => TEMPLATE_IMAGES[active], [active]);
 
@@ -55,7 +64,7 @@ export default function Home() {
       <StatusBar barStyle="dark-content" />
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, styles.contentMax]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
@@ -72,6 +81,38 @@ export default function Home() {
             <Ionicons name="bookmark-outline" size={20} color="#1A1A1A" />
           </TouchableOpacity>
         </View>
+
+        {installAvailable && !installed && !installDismissed && (
+          <View style={styles.installBanner} testID="install-banner">
+            <View style={styles.installIcon}>
+              <Ionicons name="cloud-download-outline" size={20} color="#1A1A1A" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.installTitle}>Install Invite Studio</Text>
+              <Text style={styles.installSub}>
+                Add to your device — no app store needed.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.installBtn}
+              onPress={async () => {
+                const r = await promptInstall();
+                if (r === "unavailable") setInstallDismissed(true);
+              }}
+              testID="install-btn"
+              activeOpacity={0.85}
+            >
+              <Text style={styles.installBtnText}>Install</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setInstallDismissed(true)}
+              style={styles.installClose}
+              testID="install-dismiss-btn"
+            >
+              <Ionicons name="close" size={18} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+        )}
 
         <Text style={styles.section}>Choose an event</Text>
         <ScrollView
@@ -134,7 +175,7 @@ export default function Home() {
             <TouchableOpacity
               key={uri}
               activeOpacity={0.85}
-              style={styles.tplCardWrap}
+              style={[styles.tplCardWrap, { width: tplCardWidth }]}
               onPress={() => pickTemplate(uri)}
               testID={`template-card-${idx}`}
             >
@@ -162,6 +203,54 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#FAF9F6" },
   scroll: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 },
+  contentMax: { maxWidth: 1200, alignSelf: "center", width: "100%" },
+  installBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    padding: 14,
+    marginBottom: 18,
+    gap: 12,
+  },
+  installIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FFF4F1",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  installTitle: {
+    fontFamily: "Manrope_600SemiBold",
+    fontSize: 14,
+    color: "#1A1A1A",
+  },
+  installSub: {
+    fontFamily: "Manrope_400Regular",
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  installBtn: {
+    backgroundColor: "#1A1A1A",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  installBtnText: {
+    color: "#FFFFFF",
+    fontFamily: "Manrope_600SemiBold",
+    fontSize: 13,
+  },
+  installClose: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -254,7 +343,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   tplCardWrap: {
-    width: "48.5%",
     aspectRatio: 3 / 4,
     marginBottom: 14,
     borderRadius: 20,

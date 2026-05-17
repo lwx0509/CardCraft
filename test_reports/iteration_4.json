@@ -1,0 +1,37 @@
+{
+  "summary": "Tested web/PWA upgrade for Invite Studio. Backend smoke regression PASSES: GET /api/health → {status:ok, llm_key_configured:true, stripe_configured:true}; POST /api/payments/create-checkout-session returns cs_* session_id + checkout_url. HTML check PASSES: /<title>Invite Studio — Custom event invitations</title>, <meta name=theme-color content=#E26D5A>, <link rel=manifest href=data:application/manifest+json;...> with manifest JSON-decoding to {name:'Invite Studio', short_name:'Invites', start_url:'/', display:'standalone', theme_color:#E26D5A, background_color:#FAF9F6, icons:[...]}. Home responsive grid VERIFIED: @1920 → 4 cols (template-card-0..3 all y=348, centered with 380px left/right whitespace, maxWidth ~1160); @900 → 3 cols (cards 0,1,2 on row1; card 3 on row2); @600 → 2 cols (cards 0,1 row1; 2,3 row2). install-banner correctly NOT shown in headless Chromium (no beforeinstallprompt fired), no console crash. Editor @1920 VERIFIED: canvas wrap rendered at x=660, width=600 (centered via scrollContent maxWidth:640 + 20px padding); all 6 tool buttons (tool-text/background/color/font/layout/ai) + save-invite-btn present and tappable. Preview unpaid VERIFIED: locked-banner + pay-btn render. Service worker: navigator.serviceWorker.getRegistrations()=0, controller=false on both first AND second load — registration via blob: URL did not produce a registration that persisted, BUT inline registration code did not throw any console errors (try/catch wraps everything). save-gallery-btn label='Download' on web verified by static code review (preview/[id].tsx line 306: `const saveLabel = IS_WEB ? 'Download' : 'Save to gallery';`); could not seed a paid invite via localStorage in Playwright due to double-JSON encoding of AsyncStorage layer (storage.setItem stringifies, AND saveInvites passes JSON.stringify(invites) as the value — so raw on disk is double-encoded). Preview 2-column layout verified by code review (preview/[id].tsx: isWide=width>=900 → contentWide row layout, shotWrap flex:1.2 maxWidth:560, sidePanel flex:1).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_invite_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional: investigate why the blob-URL service worker registration in app/+html.tsx does not produce a persistent registration on Chromium (getRegistrations returns []). Function does not throw, so PWA install criteria may still be met via manifest+secure-context heuristics in real Chrome, but a hosted /sw.js would be more reliable than a Blob URL (some browsers reject Blob-URL SW registrations for installability).",
+    "Optional (testing-only): expose a small testing helper or use a stable storage encoding so that QA can seed a paid invite via document JS without round-tripping through Stripe. Currently `saveInvites` double-stringifies (storage.setItem already JSON.stringifies, and saveInvites passes JSON.stringify(invites)) — confusing but functional."
+  ],
+  "critical_code_review_comments": [
+    "preview/[id].tsx save flow on web correctly skips MediaLibrary and uses webDownload via a hidden <a download>; webShare gracefully falls back to download if navigator.canShare({files}) is false — looks good.",
+    "+html.tsx inline SW: registers a Blob-URL SW with empty fetch handler. This is fine syntactically and won't crash, but most browsers do not consider Blob-URL SWs valid for installability — Chrome historically required a same-origin SW script. Consider serving /sw.js as a static asset so Add-to-Home-Screen works on more browsers.",
+    "store/invites.ts saveInvites does `storage.setItem(KEY, JSON.stringify(invites))`, and storage.setItem itself JSON.stringifies — leading to a double-encoded raw on disk. loadInvites correctly compensates by JSON.parse-ing the string a second time. Works but is brittle; consider passing the array directly so storage handles the only stringify.",
+    "useInstallPrompt: window event listener for beforeinstallprompt is attached at module top-level (outside the hook). If the module is imported after the event already fired (unlikely on first paint but possible on hot reload), the prompt is lost. Minor edge case."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (2/2 critical pytest passing — health + create-checkout-session)",
+    "frontend": "100% on requested flows (manifest/title/theme; 4/3/2-col responsive home; centered editor; preview unpaid). Paid-preview Download label verified via code review."
+  },
+  "seed_data_creation": "Tried to seed paid invite via localStorage; storage layer's double-stringify foiled it. No persistent test data created.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Storage layer in /app/frontend/src/utils/storage/index.ts auto-JSON.stringifies values. /app/frontend/src/store/invites.ts ALSO calls JSON.stringify before storing — net result: raw localStorage value is double-encoded JSON. To seed a paid invite from Playwright, write `localStorage.setItem('invite-maker:invites:v3', JSON.stringify(JSON.stringify([invite])))`. The Save button label on web is hardcoded 'Download' (preview/[id].tsx line 306). isWide breakpoint for preview 2-column layout is width>=900.",
+  "rca_of_issue": "No app bugs found. The 'preview never loads' observed during seeding was a test-rig artifact caused by single-encoded localStorage data not matching the store's double-encode expectation — not a product bug."
+}

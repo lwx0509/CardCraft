@@ -8,6 +8,7 @@ import {
   Alert,
   Platform,
   ScrollView,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
@@ -28,6 +29,7 @@ import {
 } from "@/src/api/client";
 
 const PRICE_LABEL = "$9.99";
+const IS_WEB = Platform.OS === "web";
 
 export default function Preview() {
   const router = useRouter();
@@ -37,6 +39,8 @@ export default function Preview() {
     invite_id?: string;
   }>();
   const id = String(params.id || "");
+  const { width } = useWindowDimensions();
+  const isWide = width >= 900;
 
   const [invite, setInvite] = useState<Invite | null>(null);
   const [busy, setBusy] = useState<"" | "pay" | "share" | "save">("");
@@ -52,7 +56,6 @@ export default function Preview() {
     refreshInvite();
   }, [refreshInvite]);
 
-  // If we returned from Stripe Checkout, sync the session and update local paid state
   useFocusEffect(
     useCallback(() => {
       const sid = params.session_id ? String(params.session_id) : "";
@@ -67,8 +70,7 @@ export default function Preview() {
               setInvite({ ...i, paid: true });
             }
           }
-        } catch (e) {
-          // best-effort: also try the status endpoint
+        } catch {
           try {
             const s = await getPaymentStatus(id);
             if (s.paid) {
@@ -109,15 +111,12 @@ export default function Preview() {
         success_url: successUrl,
         cancel_url: cancelUrl,
       });
-      if (Platform.OS === "web") {
+      if (IS_WEB) {
         // @ts-ignore
         window.location.href = res.checkout_url;
         return;
       }
       const result = await WebBrowser.openBrowserAsync(res.checkout_url);
-      // After the browser closes, poll the backend for paid status
-      // (success_url contains session_id which Stripe substitutes)
-      // Try syncing by session_id first, then fallback to status.
       try {
         const s = await syncSession(res.session_id);
         if (s.paid) {
@@ -148,8 +147,63 @@ export default function Preview() {
     if (invite?.paid) return true;
     Alert.alert(
       "Unlock to save & share",
-      `Pay ${PRICE_LABEL} once for this invite to save it to your gallery and share it.`,
+      `Pay ${PRICE_LABEL} once for this invite to download and share it.`,
     );
+    return false;
+  };
+
+  const slug = (s: string) =>
+    s.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() ||
+    "invite";
+
+  // ---------- Web-native share & download ----------
+  const dataUriToBlob = (dataUri: string): Blob => {
+    const [header, base64] = dataUri.split(",");
+    const mime =
+      header.match(/data:([^;]+);base64/)?.[1] || "application/octet-stream";
+    const bin = atob(base64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  };
+
+  const webDownload = async (uri: string, filename: string) => {
+    let url = uri;
+    let cleanup: (() => void) | null = null;
+    if (uri.startsWith("data:")) {
+      const blob = dataUriToBlob(uri);
+      url = URL.createObjectURL(blob);
+      cleanup = () => URL.revokeObjectURL(url);
+    }
+    // @ts-ignore
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => cleanup?.(), 1000);
+  };
+
+  const webShare = async (uri: string, filename: string): Promise<boolean> => {
+    try {
+      const blob = uri.startsWith("data:")
+        ? dataUriToBlob(uri)
+        : await (await fetch(uri)).blob();
+      const file = new File([blob], filename, { type: blob.type || "image/png" });
+      // @ts-ignore
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        // @ts-ignore
+        await navigator.share({
+          files: [file],
+          title: "My event invitation",
+          text: "Check out this invite I made with Invite Studio!",
+        });
+        return true;
+      }
+    } catch {
+      /* fall through */
+    }
     return false;
   };
 
@@ -160,6 +214,19 @@ export default function Preview() {
       const uri = await capture();
       if (!uri) {
         Alert.alert("Could not prepare image", "Please try again.");
+        return;
+      }
+      const filename = `${slug(invite!.title)}.png`;
+      if (IS_WEB) {
+        const shared = await webShare(uri, filename);
+        if (!shared) {
+          // Browser doesn't support file share → download instead
+          await webDownload(uri, filename);
+          Alert.alert(
+            "Downloaded",
+            "Your browser doesn't support direct sharing. The invite was downloaded — share it from your Files / Photos.",
+          );
+        }
         return;
       }
       const available = await Sharing.isAvailableAsync();
@@ -178,18 +245,18 @@ export default function Preview() {
     }
   };
 
-  const onSaveToGallery = async () => {
+  const onSave = async () => {
     if (!ensurePaid()) return;
     setBusy("save");
     try {
-      if (Platform.OS === "web") {
-        const uri = await capture();
-        if (!uri) return;
-        if (typeof window !== "undefined") {
-          // @ts-ignore
-          const win = window.open();
-          if (win) win.document.write(`<img src="${uri}" style="max-width:100%" />`);
-        }
+      const uri = await capture();
+      if (!uri) {
+        Alert.alert("Could not prepare image", "Please try again.");
+        return;
+      }
+      const filename = `${slug(invite!.title)}.png`;
+      if (IS_WEB) {
+        await webDownload(uri, filename);
         return;
       }
       const perm = await MediaLibrary.requestPermissionsAsync();
@@ -202,11 +269,6 @@ export default function Preview() {
         } else {
           Alert.alert("Permission denied", "We need access to save the image.");
         }
-        return;
-      }
-      const uri = await capture();
-      if (!uri) {
-        Alert.alert("Could not prepare image", "Please try again.");
         return;
       }
       let fileUri = uri;
@@ -241,82 +303,87 @@ export default function Preview() {
   }
 
   const paid = !!invite.paid;
+  const saveLabel = IS_WEB ? "Download" : "Save to gallery";
 
   return (
     <SafeAreaView style={styles.safe} edges={["bottom"]}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <ViewShot
-          ref={shotRef}
-          options={{ format: "png", quality: 1, result: "tmpfile" }}
-          style={styles.shot}
-        >
-          <InviteCanvas invite={invite} rounded={false} showAttribution />
-        </ViewShot>
-
-        {!paid && (
-          <View style={styles.lockedBanner} testID="locked-banner">
-            <Ionicons name="lock-closed" size={16} color="#1A1A1A" />
-            <Text style={styles.lockedText}>
-              Unlock save & share for this invite — {PRICE_LABEL}
-            </Text>
-          </View>
-        )}
-
-        {paid && (
-          <View style={[styles.lockedBanner, styles.unlockedBanner]} testID="unlocked-banner">
-            <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-            <Text style={[styles.lockedText, { color: "#065F46" }]}>
-              Unlocked — save and share away!
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.actions}>
-          {!paid ? (
-            <ActionButton
-              icon="card-outline"
-              label={`Unlock for ${PRICE_LABEL}`}
-              primary
-              loading={busy === "pay"}
-              onPress={onPay}
-              testID="pay-btn"
-            />
-          ) : (
-            <>
-              <ActionButton
-                icon="share-social-outline"
-                label="Share"
-                primary
-                loading={busy === "share"}
-                onPress={onShare}
-                testID="share-btn"
-              />
-              <ActionButton
-                icon="download-outline"
-                label="Save to gallery"
-                loading={busy === "save"}
-                onPress={onSaveToGallery}
-                testID="save-gallery-btn"
-              />
-            </>
-          )}
-          <ActionButton
-            icon="create-outline"
-            label="Edit"
-            onPress={() =>
-              router.replace({ pathname: "/editor", params: { id: invite.id } })
-            }
-            testID="edit-from-preview-btn"
-          />
+      <ScrollView contentContainerStyle={[styles.content, isWide && styles.contentWide]}>
+        <View style={[styles.shotWrap, isWide && styles.shotWrapWide]}>
+          <ViewShot
+            ref={shotRef}
+            options={{ format: "png", quality: 1, result: "tmpfile" }}
+            style={styles.shot}
+          >
+            <InviteCanvas invite={invite} rounded={false} showAttribution />
+          </ViewShot>
         </View>
 
-        <TouchableOpacity
-          style={styles.homeLink}
-          onPress={() => router.replace("/")}
-          testID="back-home-btn"
-        >
-          <Text style={styles.homeLinkText}>Back to home</Text>
-        </TouchableOpacity>
+        <View style={[styles.sidePanel, isWide && styles.sidePanelWide]}>
+          {!paid && (
+            <View style={styles.lockedBanner} testID="locked-banner">
+              <Ionicons name="lock-closed" size={16} color="#1A1A1A" />
+              <Text style={styles.lockedText}>
+                Unlock download & share for this invite — {PRICE_LABEL}
+              </Text>
+            </View>
+          )}
+
+          {paid && (
+            <View style={[styles.lockedBanner, styles.unlockedBanner]} testID="unlocked-banner">
+              <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+              <Text style={[styles.lockedText, { color: "#065F46" }]}>
+                Unlocked — download and share away!
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.actions}>
+            {!paid ? (
+              <ActionButton
+                icon="card-outline"
+                label={`Unlock for ${PRICE_LABEL}`}
+                primary
+                loading={busy === "pay"}
+                onPress={onPay}
+                testID="pay-btn"
+              />
+            ) : (
+              <>
+                <ActionButton
+                  icon="share-social-outline"
+                  label="Share"
+                  primary
+                  loading={busy === "share"}
+                  onPress={onShare}
+                  testID="share-btn"
+                />
+                <ActionButton
+                  icon="download-outline"
+                  label={saveLabel}
+                  loading={busy === "save"}
+                  onPress={onSave}
+                  testID="save-gallery-btn"
+                />
+              </>
+            )}
+            <ActionButton
+              icon="create-outline"
+              label="Edit"
+              onPress={() =>
+                router.replace({ pathname: "/editor", params: { id: invite.id } })
+              }
+              testID="edit-from-preview-btn"
+            />
+          </View>
+
+          <TouchableOpacity
+            style={styles.homeLink}
+            onPress={() => router.replace("/")}
+            testID="back-home-btn"
+          >
+            <Text style={styles.homeLinkText}>Back to home</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -350,12 +417,7 @@ function ActionButton(props: {
           color={props.primary ? "#FFFFFF" : "#1A1A1A"}
         />
       )}
-      <Text
-        style={[
-          styles.actionLabel,
-          props.primary && { color: "#FFFFFF" },
-        ]}
-      >
+      <Text style={[styles.actionLabel, props.primary && { color: "#FFFFFF" }]}>
         {props.label}
       </Text>
     </TouchableOpacity>
@@ -371,6 +433,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   content: { padding: 20, paddingBottom: 32 },
+  contentWide: {
+    flexDirection: "row",
+    gap: 32,
+    maxWidth: 1100,
+    alignSelf: "center",
+    width: "100%",
+    paddingTop: 36,
+    paddingHorizontal: 40,
+  },
+  shotWrap: { marginBottom: 18 },
+  shotWrapWide: { flex: 1.2, maxWidth: 560, marginBottom: 0 },
   shot: {
     borderRadius: 22,
     overflow: "hidden",
@@ -380,8 +453,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     shadowRadius: 20,
     elevation: 8,
-    marginBottom: 18,
   },
+  sidePanel: {},
+  sidePanelWide: { flex: 1, justifyContent: "center" },
   lockedBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -389,7 +463,7 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: "#FEF3C7",
     borderRadius: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 14,
     marginBottom: 14,
   },
@@ -412,20 +486,13 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 6,
   },
-  actionBtnPrimary: {
-    backgroundColor: "#E26D5A",
-    borderColor: "#E26D5A",
-  },
+  actionBtnPrimary: { backgroundColor: "#E26D5A", borderColor: "#E26D5A" },
   actionLabel: {
     fontFamily: "Manrope_600SemiBold",
     fontSize: 15,
     color: "#1A1A1A",
   },
-  homeLink: {
-    alignSelf: "center",
-    paddingVertical: 12,
-    marginTop: 8,
-  },
+  homeLink: { alignSelf: "center", paddingVertical: 12, marginTop: 8 },
   homeLinkText: {
     fontFamily: "Manrope_500Medium",
     fontSize: 14,
