@@ -255,6 +255,7 @@ export default function Editor() {
             <InviteCanvas
               invite={invite}
               draggable
+              editable
               onDragStart={() => setScrollEnabled(false)}
               onDragEnd={() => setScrollEnabled(true)}
               onPositionChange={(key, p) => {
@@ -264,11 +265,18 @@ export default function Editor() {
                   updatedAt: Date.now(),
                 }));
               }}
+              onTextChange={(field, value) => {
+                setInvite((prev) => ({
+                  ...prev,
+                  [field]: value,
+                  updatedAt: Date.now(),
+                }));
+              }}
             />
           </View>
 
           <Text style={styles.dragHint}>
-            Tip: drag any text on the invite to move it
+            Tip: tap any text to edit it · drag to move
           </Text>
 
           {/* Category chip */}

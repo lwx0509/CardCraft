@@ -497,6 +497,5 @@ const styles = StyleSheet.create({
     fontFamily: "Manrope_500Medium",
     fontSize: 14,
     color: "#6B7280",
-    textDecorationLine: "underline",
   },
 });

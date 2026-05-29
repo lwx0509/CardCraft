@@ -2,20 +2,26 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
+  TextInput,
   Image,
   StyleSheet,
   PanResponder,
   Animated,
   LayoutChangeEvent,
+  Platform,
 } from "react-native";
 import type { Invite, Position } from "@/src/types/invite";
 import { FONT_OPTIONS } from "@/src/types/invite";
+
+type EditableField = "title" | "message" | "host" | "date" | "location";
 
 type Props = {
   invite: Invite;
   rounded?: boolean;
   draggable?: boolean;
+  editable?: boolean;
   onPositionChange?: (key: keyof Invite["positions"], p: Position) => void;
+  onTextChange?: (field: EditableField, value: string) => void;
   onDragStart?: () => void;
   onDragEnd?: () => void;
   showAttribution?: boolean;
@@ -25,7 +31,9 @@ export default function InviteCanvas({
   invite,
   rounded = true,
   draggable = false,
+  editable = false,
   onPositionChange,
+  onTextChange,
   onDragStart,
   onDragEnd,
   showAttribution = true,
@@ -53,11 +61,17 @@ export default function InviteCanvas({
       <BackgroundLayer invite={invite} />
       <View style={[styles.overlay, { backgroundColor: overlay }]} />
 
-      {!!invite.host && (
-        <View style={styles.hostBar} pointerEvents="none">
-          <Text style={[styles.host, { color }]} numberOfLines={1}>
-            {invite.host}
-          </Text>
+      {(!!invite.host || editable) && (
+        <View style={styles.hostBar} pointerEvents={editable ? "auto" : "none"}>
+          <EditableText
+            value={invite.host}
+            editable={editable}
+            placeholder="Hosted by"
+            placeholderColor={isDark ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.6)"}
+            onChangeText={(v) => onTextChange?.("host", v)}
+            style={[styles.host, { color }]}
+            testID="canvas-input-host"
+          />
         </View>
       )}
 
@@ -70,64 +84,74 @@ export default function InviteCanvas({
         onDragEnd={onDragEnd}
         testID="text-title"
       >
-        <Text
+        <EditableText
+          value={invite.title}
+          editable={editable}
+          placeholder="Tap to add a title"
+          placeholderColor={isDark ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.6)"}
+          onChangeText={(v) => onTextChange?.("title", v)}
           style={[styles.title, { color, fontFamily }]}
-          allowFontScaling={false}
-        >
-          {invite.title}
-        </Text>
+          testID="canvas-input-title"
+        />
       </Draggable>
 
       <Draggable
         size={size}
         position={invite.positions.message}
-        draggable={draggable && !!invite.message}
+        draggable={draggable && (!!invite.message || editable)}
         onEnd={(p) => onPositionChange?.("message", p)}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         testID="text-message"
       >
-        <Text style={[styles.message, { color }]} allowFontScaling={false}>
-          {invite.message}
-        </Text>
+        <EditableText
+          value={invite.message}
+          editable={editable}
+          multiline
+          placeholder="Add your message"
+          placeholderColor={isDark ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.6)"}
+          onChangeText={(v) => onTextChange?.("message", v)}
+          style={[styles.message, { color }]}
+          testID="canvas-input-message"
+        />
       </Draggable>
 
       <Draggable
         size={size}
         position={invite.positions.meta}
-        draggable={draggable && (!!invite.date || !!invite.location)}
+        draggable={
+          draggable && (!!invite.date || !!invite.location || editable)
+        }
         onEnd={(p) => onPositionChange?.("meta", p)}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         testID="text-meta"
       >
         <View style={styles.metaWrap}>
-          <View
-            style={[
-              styles.divider,
-              {
-                backgroundColor: isDark
-                  ? "rgba(0,0,0,0.4)"
-                  : "rgba(255,255,255,0.6)",
-              },
-            ]}
+          <EditableText
+            value={invite.date}
+            editable={editable}
+            placeholder="Date & time"
+            placeholderColor={isDark ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.6)"}
+            onChangeText={(v) => onTextChange?.("date", v)}
+            style={[styles.meta, { color }]}
+            testID="canvas-input-date"
           />
-          {!!invite.date && (
-            <Text style={[styles.meta, { color }]} allowFontScaling={false}>
-              {invite.date}
-            </Text>
-          )}
-          {!!invite.location && (
-            <Text style={[styles.meta, { color }]} allowFontScaling={false}>
-              {invite.location}
-            </Text>
-          )}
+          <EditableText
+            value={invite.location}
+            editable={editable}
+            placeholder="Location"
+            placeholderColor={isDark ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.6)"}
+            onChangeText={(v) => onTextChange?.("location", v)}
+            style={[styles.meta, { color }]}
+            testID="canvas-input-location"
+          />
         </View>
       </Draggable>
 
       {showAttribution && (
         <View style={styles.attribution} pointerEvents="none" testID="attribution-footer">
-          <Text style={[styles.attributionText, { color }]}>
+          <Text style={styles.attributionText}>
             Made with Invite Studio
           </Text>
         </View>
@@ -288,6 +312,54 @@ function Draggable({
   );
 }
 
+function EditableText({
+  value,
+  editable,
+  onChangeText,
+  placeholder,
+  placeholderColor,
+  multiline,
+  style,
+  testID,
+}: {
+  value: string;
+  editable: boolean;
+  onChangeText?: (v: string) => void;
+  placeholder?: string;
+  placeholderColor?: string;
+  multiline?: boolean;
+  style?: any;
+  testID?: string;
+}) {
+  if (!editable) {
+    if (!value) return null;
+    return (
+      <Text style={style} allowFontScaling={false} testID={testID}>
+        {value}
+      </Text>
+    );
+  }
+  // On web we want a real <input>/<textarea> so the user can click and type.
+  // RN's TextInput renders to those elements on web.
+  return (
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={placeholderColor}
+      multiline={multiline}
+      // No background / border; let the text show through
+      style={[
+        style,
+        styles.editableInput,
+        Platform.OS === "web" ? { outlineStyle: "none" } : null,
+      ]}
+      allowFontScaling={false}
+      testID={testID}
+    />
+  );
+}
+
 function BackgroundLayer({ invite }: { invite: Invite }) {
   const [bgSize, setBgSize] = useState({ w: 0, h: 0 });
   const layout = invite.mosaicLayout;
@@ -420,6 +492,15 @@ const styles = StyleSheet.create({
   },
   metaWrap: { alignItems: "center" },
   divider: { width: 40, height: 1, marginBottom: 10 },
+  editableInput: {
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    padding: 0,
+    margin: 0,
+    textAlign: "center",
+    // @ts-ignore — web only
+    caretColor: "currentColor",
+  },
   meta: {
     fontFamily: "Manrope_500Medium",
     fontSize: 14,
@@ -440,5 +521,14 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     textTransform: "uppercase",
     opacity: 0.6,
+  },
+});
+000000",
+    opacity: 0.8,
+    backgroundColor: "rgba(255,255,255,0.6)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: "hidden",
   },
 });
