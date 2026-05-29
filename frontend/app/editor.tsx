@@ -48,6 +48,7 @@ export default function Editor() {
   const [loading, setLoading] = useState(true);
   const [tool, setTool] = useState<Tool>("text");
   const [busy, setBusy] = useState<"" | "ai-text" | "ai-bg" | "save">("");
+  const [scrollEnabled, setScrollEnabled] = useState(true);
 
   const [invite, setInvite] = useState<Invite>({
     id: "",
@@ -247,12 +248,15 @@ export default function Editor() {
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          scrollEnabled={scrollEnabled}
         >
           {/* Canvas */}
           <View style={styles.canvasWrap} testID="editor-canvas-wrap">
             <InviteCanvas
               invite={invite}
               draggable
+              onDragStart={() => setScrollEnabled(false)}
+              onDragEnd={() => setScrollEnabled(true)}
               onPositionChange={(key, p) => {
                 setInvite((prev) => ({
                   ...prev,

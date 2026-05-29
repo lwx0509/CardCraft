@@ -16,6 +16,8 @@ type Props = {
   rounded?: boolean;
   draggable?: boolean;
   onPositionChange?: (key: keyof Invite["positions"], p: Position) => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
   showAttribution?: boolean;
 };
 
@@ -24,6 +26,8 @@ export default function InviteCanvas({
   rounded = true,
   draggable = false,
   onPositionChange,
+  onDragStart,
+  onDragEnd,
   showAttribution = true,
 }: Props) {
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -62,6 +66,8 @@ export default function InviteCanvas({
         position={invite.positions.title}
         draggable={draggable && !!invite.title}
         onEnd={(p) => onPositionChange?.("title", p)}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
         testID="text-title"
       >
         <Text
@@ -77,6 +83,8 @@ export default function InviteCanvas({
         position={invite.positions.message}
         draggable={draggable && !!invite.message}
         onEnd={(p) => onPositionChange?.("message", p)}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
         testID="text-message"
       >
         <Text style={[styles.message, { color }]} allowFontScaling={false}>
@@ -89,6 +97,8 @@ export default function InviteCanvas({
         position={invite.positions.meta}
         draggable={draggable && (!!invite.date || !!invite.location)}
         onEnd={(p) => onPositionChange?.("meta", p)}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
         testID="text-meta"
       >
         <View style={styles.metaWrap}>
@@ -131,6 +141,8 @@ function Draggable({
   position,
   draggable,
   onEnd,
+  onDragStart,
+  onDragEnd,
   children,
   testID,
 }: {
@@ -138,54 +150,86 @@ function Draggable({
   position: Position;
   draggable: boolean;
   onEnd: (p: Position) => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
   children: React.ReactNode;
   testID?: string;
 }) {
-  const stored = useRef(position);
-  useEffect(() => {
-    stored.current = position;
-  }, [position]);
-
-  // Own size of this draggable element (measured via onLayout) so we can self-center
+  // Measured own size of this draggable (for self-centering on its anchor)
   const [ownSize, setOwnSize] = useState({ w: 0, h: 0 });
 
-  const delta = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  // Single pixel-level Animated value driving the element's transform.
+  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  // Pixel position captured at gesture start
+  const startPx = useRef({ x: 0, y: 0 });
+  const draggingRef = useRef(false);
+  const positionRef = useRef(position);
+
+  const selfCenterX = -ownSize.w / 2;
+  const selfCenterY = -ownSize.h / 2;
+  const pxX = position.x * size.w + selfCenterX;
+  const pxY = position.y * size.h + selfCenterY;
+
+  // Whenever external state changes (and we're not actively dragging), snap to
+  // the new computed pixel position so the text stays exactly where it was
+  // placed and re-centers when the canvas size / own size changes.
+  useEffect(() => {
+    positionRef.current = position;
+    if (draggingRef.current) return;
+    pan.setValue({ x: pxX, y: pxY });
+  }, [pxX, pxY, pan, position]);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => draggable,
+      onStartShouldSetPanResponderCapture: () => draggable,
       onMoveShouldSetPanResponder: (_e, g) =>
         draggable && (Math.abs(g.dx) > 1 || Math.abs(g.dy) > 1),
+      onMoveShouldSetPanResponderCapture: (_e, g) =>
+        draggable && (Math.abs(g.dx) > 1 || Math.abs(g.dy) > 1),
+      onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
-        delta.setValue({ x: 0, y: 0 });
+        draggingRef.current = true;
+        // Capture the current pixel position from the latest props
+        const currX = positionRef.current.x * size.w + selfCenterX;
+        const currY = positionRef.current.y * size.h + selfCenterY;
+        startPx.current = { x: currX, y: currY };
+        pan.setValue({ x: currX, y: currY });
+        onDragStart?.();
       },
-      onPanResponderMove: Animated.event([null, { dx: delta.x, dy: delta.y }], {
-        useNativeDriver: false,
-      }),
+      onPanResponderMove: (_e, g) => {
+        pan.setValue({
+          x: startPx.current.x + g.dx,
+          y: startPx.current.y + g.dy,
+        });
+      },
       onPanResponderRelease: (_e, g) => {
+        draggingRef.current = false;
+        const finalPxX = startPx.current.x + g.dx;
+        const finalPxY = startPx.current.y + g.dy;
         const w = size.w || 1;
         const h = size.h || 1;
         const nx = Math.max(
           -0.45,
-          Math.min(0.45, stored.current.x + g.dx / w),
+          Math.min(0.45, (finalPxX - selfCenterX) / w),
         );
         const ny = Math.max(
           -0.45,
-          Math.min(0.45, stored.current.y + g.dy / h),
+          Math.min(0.45, (finalPxY - selfCenterY) / h),
         );
-        delta.setValue({ x: 0, y: 0 });
+        // Keep the visual position pinned to where the user dropped it; the
+        // committed normalized position will land at the same pixel after the
+        // re-render via the useEffect snap above.
+        pan.setValue({ x: finalPxX, y: finalPxY });
+        onDragEnd?.();
         onEnd({ x: nx, y: ny });
+      },
+      onPanResponderTerminate: () => {
+        draggingRef.current = false;
+        onDragEnd?.();
       },
     }),
   ).current;
-
-  // Position is anchored to the canvas center (top:50%, left:50%) and the
-  // element self-centers via -ownSize/2 so each wrapper hugs only its own
-  // content — non-overlapping hitboxes between title / message / meta.
-  const selfCenterX = -ownSize.w / 2;
-  const selfCenterY = -ownSize.h / 2;
-  const baseX = position.x * size.w + selfCenterX;
-  const baseY = position.y * size.h + selfCenterY;
 
   return (
     <Animated.View
@@ -200,8 +244,8 @@ function Draggable({
         styles.draggable,
         {
           transform: [
-            { translateX: Animated.add(delta.x, baseX) },
-            { translateY: Animated.add(delta.y, baseY) },
+            { translateX: pan.x },
+            { translateY: pan.y },
           ],
         },
       ]}
@@ -314,17 +358,18 @@ const styles = StyleSheet.create({
   },
   draggable: {
     position: "absolute",
-    top: "50%",
-    left: "50%",
+    top: 0,
+    left: 0,
     paddingHorizontal: 12,
     paddingVertical: 6,
     alignItems: "center",
-    maxWidth: "90%",
     // Mouse cursor hint on web only — silently ignored on native
     // @ts-ignore
     cursor: "grab",
     // @ts-ignore
     userSelect: "none",
+    // @ts-ignore
+    touchAction: "none",
   },
   title: {
     fontSize: 32,
