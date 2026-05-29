@@ -155,52 +155,79 @@ function Draggable({
   children: React.ReactNode;
   testID?: string;
 }) {
-  // Measured own size of this draggable (for self-centering on its anchor)
   const [ownSize, setOwnSize] = useState({ w: 0, h: 0 });
 
-  // Single pixel-level Animated value driving the element's transform.
+  // Pixel-level animated position driving the transform
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  // Pixel position captured at gesture start
   const startPx = useRef({ x: 0, y: 0 });
   const draggingRef = useRef(false);
+
+  // Refs that the long-lived PanResponder closure reads from. We MUST use refs
+  // here instead of closure variables because the PanResponder is created once
+  // (via useRef below) and would otherwise capture the stale initial values of
+  // size / ownSize / position / draggable from the first render.
+  const sizeRef = useRef(size);
+  const ownSizeRef = useRef(ownSize);
   const positionRef = useRef(position);
-
-  const selfCenterX = -ownSize.w / 2;
-  const selfCenterY = -ownSize.h / 2;
-  // Canvas center as the (0,0) anchor + normalized offset + self-centering so
-  // the element's center lands on the requested position.
-  const pxX = size.w / 2 + position.x * size.w + selfCenterX;
-  const pxY = size.h / 2 + position.y * size.h + selfCenterY;
-
-  // Whenever external state changes (and we're not actively dragging), snap to
-  // the new computed pixel position so the text stays exactly where it was
-  // placed and re-centers when the canvas size / own size changes.
+  const draggableRef = useRef(draggable);
+  const onDragStartRef = useRef(onDragStart);
+  const onDragEndRef = useRef(onDragEnd);
+  const onEndRef = useRef(onEnd);
+  useEffect(() => {
+    sizeRef.current = size;
+  }, [size]);
+  useEffect(() => {
+    ownSizeRef.current = ownSize;
+  }, [ownSize]);
   useEffect(() => {
     positionRef.current = position;
+  }, [position]);
+  useEffect(() => {
+    draggableRef.current = draggable;
+  }, [draggable]);
+  useEffect(() => {
+    onDragStartRef.current = onDragStart;
+  }, [onDragStart]);
+  useEffect(() => {
+    onDragEndRef.current = onDragEnd;
+  }, [onDragEnd]);
+  useEffect(() => {
+    onEndRef.current = onEnd;
+  }, [onEnd]);
+
+  // Compute the pixel position from the latest props/measurements
+  const computePx = () => {
+    const s = sizeRef.current;
+    const os = ownSizeRef.current;
+    const p = positionRef.current;
+    return {
+      x: s.w / 2 + p.x * s.w - os.w / 2,
+      y: s.h / 2 + p.y * s.h - os.h / 2,
+    };
+  };
+
+  // Whenever the externally-controlled position/size changes (and we're not
+  // actively dragging), snap the pan to the new computed pixel position.
+  useEffect(() => {
     if (draggingRef.current) return;
-    pan.setValue({ x: pxX, y: pxY });
-  }, [pxX, pxY, pan, position]);
+    const px = computePx();
+    pan.setValue(px);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size.w, size.h, ownSize.w, ownSize.h, position.x, position.y]);
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => draggable,
-      onStartShouldSetPanResponderCapture: () => draggable,
-      onMoveShouldSetPanResponder: () => draggable,
-      onMoveShouldSetPanResponderCapture: () => draggable,
+      onStartShouldSetPanResponder: () => draggableRef.current,
+      onStartShouldSetPanResponderCapture: () => draggableRef.current,
+      onMoveShouldSetPanResponder: () => draggableRef.current,
+      onMoveShouldSetPanResponderCapture: () => draggableRef.current,
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
         draggingRef.current = true;
-        const currX =
-          size.w / 2 +
-          positionRef.current.x * size.w +
-          -ownSize.w / 2;
-        const currY =
-          size.h / 2 +
-          positionRef.current.y * size.h +
-          -ownSize.h / 2;
-        startPx.current = { x: currX, y: currY };
-        pan.setValue({ x: currX, y: currY });
-        onDragStart?.();
+        const px = computePx();
+        startPx.current = px;
+        pan.setValue(px);
+        onDragStartRef.current?.();
       },
       onPanResponderMove: (_e, g) => {
         pan.setValue({
@@ -210,37 +237,34 @@ function Draggable({
       },
       onPanResponderRelease: (_e, g) => {
         draggingRef.current = false;
+        const s = sizeRef.current;
+        const os = ownSizeRef.current;
         const finalPxX = startPx.current.x + g.dx;
         const finalPxY = startPx.current.y + g.dy;
-        const w = size.w || 1;
-        const h = size.h || 1;
-        // Clamp so the element's centre stays roughly within the canvas
-        // (factor in self-centering and an edge buffer so text isn't lost).
+        const w = s.w || 1;
+        const h = s.h || 1;
         const nx = Math.max(
           -0.45,
-          Math.min(0.45, (finalPxX + ownSize.w / 2 - w / 2) / w),
+          Math.min(0.45, (finalPxX + os.w / 2 - w / 2) / w),
         );
         const ny = Math.max(
           -0.45,
-          Math.min(0.45, (finalPxY + ownSize.h / 2 - h / 2) / h),
+          Math.min(0.45, (finalPxY + os.h / 2 - h / 2) / h),
         );
-        // Keep the visual position pinned to where the user dropped it; the
-        // committed normalized position will land at the same pixel after the
-        // re-render via the useEffect snap above.
         pan.setValue({ x: finalPxX, y: finalPxY });
-        onDragEnd?.();
-        onEnd({ x: nx, y: ny });
+        onDragEndRef.current?.();
+        onEndRef.current?.({ x: nx, y: ny });
       },
       onPanResponderTerminate: () => {
         draggingRef.current = false;
-        onDragEnd?.();
+        onDragEndRef.current?.();
       },
     }),
   ).current;
 
   return (
     <Animated.View
-      {...(draggable ? panResponder.panHandlers : {})}
+      {...panResponder.panHandlers}
       onLayout={(e) =>
         setOwnSize({
           w: e.nativeEvent.layout.width,
@@ -250,6 +274,7 @@ function Draggable({
       style={[
         styles.draggable,
         {
+          opacity: ownSize.w > 0 ? 1 : 0,
           transform: [
             { translateX: pan.x },
             { translateY: pan.y },
