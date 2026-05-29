@@ -31,7 +31,7 @@ import {
   makeId,
   upsertInvite,
 } from "@/src/store/invites";
-import { suggestText, generateBackground } from "@/src/api/client";
+import { suggestText, generateBackground, shareInvite, getSharedInvite } from "@/src/api/client";
 
 type Tool = "text" | "background" | "color" | "font" | "layout" | "ai";
 
@@ -47,8 +47,9 @@ export default function Editor() {
 
   const [loading, setLoading] = useState(true);
   const [tool, setTool] = useState<Tool>("text");
-  const [busy, setBusy] = useState<"" | "ai-text" | "ai-bg" | "save">("");
+  const [busy, setBusy] = useState<"" | "ai-text" | "ai-bg" | "save" | "share">("");
   const [scrollEnabled, setScrollEnabled] = useState(true);
+  const [shareUrl, setShareUrl] = useState<string>("");
 
   const [invite, setInvite] = useState<Invite>({
     id: "",
@@ -77,11 +78,48 @@ export default function Editor() {
   useEffect(() => {
     (async () => {
       if (params.id) {
-        const existing = await getInvite(String(params.id));
+        const idStr = String(params.id);
+        const existing = await getInvite(idStr);
         if (existing) {
           setInvite(existing);
           setLoading(false);
           return;
+        }
+        // Not found locally — try fetching from the share endpoint so a URL
+        // like /editor?id=xxx works across browsers.
+        try {
+          const remote = await getSharedInvite(idStr);
+          if (remote?.payload) {
+            const payload = remote.payload as Partial<Invite>;
+            const cat = (payload.category as Category) || "birthday";
+            setInvite({
+              id: idStr,
+              category: cat,
+              title: payload.title || "Let's celebrate!",
+              message: payload.message || "",
+              host: payload.host || "",
+              date: payload.date || "",
+              location: payload.location || "",
+              background:
+                payload.background || TEMPLATE_IMAGES[cat][0],
+              mosaicImages: payload.mosaicImages || [],
+              mosaicLayout: payload.mosaicLayout || "single",
+              bgFit: payload.bgFit || "cover",
+              bgZoom: payload.bgZoom ?? 1,
+              bgOffsetX: payload.bgOffsetX ?? 0,
+              bgOffsetY: payload.bgOffsetY ?? 0,
+              textColor: payload.textColor || "#FFFFFF",
+              titleFont: payload.titleFont || "playfair",
+              positions: payload.positions || defaultPositions(),
+              paid: payload.paid ?? false,
+              createdAt: payload.createdAt ?? Date.now(),
+              updatedAt: Date.now(),
+            });
+            setLoading(false);
+            return;
+          }
+        } catch {
+          /* not on server either — fall through to fresh state */
         }
       }
       const cat = (params.category as Category) || "birthday";
@@ -213,6 +251,33 @@ export default function Editor() {
     }
   };
 
+  const onShareLink = async () => {
+    try {
+      setBusy("share");
+      const id = invite.id || makeId();
+      const res = await shareInvite(id, invite);
+      const origin =
+        typeof window !== "undefined" && window.location?.origin
+          ? window.location.origin
+          : "";
+      const url = origin
+        ? `${origin}/editor?id=${res.share_id}`
+        : res.url;
+      setShareUrl(url);
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(url);
+        } catch {
+          /* clipboard may be unavailable in some browsers */
+        }
+      }
+    } catch (e: any) {
+      Alert.alert("Share failed", e?.message || "Please try again.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   const onSave = async () => {
     if (!invite.title.trim()) {
       Alert.alert("Add a title", "Please enter an invitation title.");
@@ -278,6 +343,36 @@ export default function Editor() {
           <Text style={styles.dragHint}>
             Tip: tap any text to edit it · drag to move
           </Text>
+
+          {/* Share-edit link bar */}
+          <View style={styles.shareBar}>
+            <TouchableOpacity
+              style={styles.shareBtn}
+              onPress={onShareLink}
+              activeOpacity={0.85}
+              disabled={busy === "share"}
+              testID="share-edit-link-btn"
+            >
+              {busy === "share" ? (
+                <ActivityIndicator size="small" color="#1A1A1A" />
+              ) : (
+                <Ionicons name="link-outline" size={16} color="#1A1A1A" />
+              )}
+              <Text style={styles.shareBtnText}>
+                {shareUrl ? "Copy edit link again" : "Get a shareable edit link"}
+              </Text>
+            </TouchableOpacity>
+            {!!shareUrl && (
+              <Text
+                style={styles.shareUrlText}
+                numberOfLines={2}
+                selectable
+                testID="share-edit-link-url"
+              >
+                {shareUrl}
+              </Text>
+            )}
+          </View>
 
           {/* Category chip */}
           <View style={[styles.catChip, { backgroundColor: headerColor }]}>
@@ -1005,6 +1100,31 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 12,
     marginTop: -6,
+  },
+  shareBar: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    padding: 12,
+    marginBottom: 14,
+    gap: 8,
+  },
+  shareBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  shareBtnText: {
+    fontFamily: "Manrope_600SemiBold",
+    fontSize: 13,
+    color: "#1A1A1A",
+  },
+  shareUrlText: {
+    fontFamily: "Manrope_500Medium",
+    fontSize: 11,
+    color: "#6B7280",
+    paddingLeft: 24,
   },
   fontRow: {
     paddingVertical: 14,

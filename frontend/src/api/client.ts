@@ -85,3 +85,30 @@ export async function syncSession(session_id: string): Promise<PaymentStatus> {
   if (!res.ok) throw new Error(`sync failed: ${res.status}`);
   return res.json();
 }
+
+// ---------- Share ----------
+export type ShareInviteResponse = { share_id: string; url: string };
+
+export async function shareInvite(
+  invite_id: string,
+  payload: any,
+): Promise<ShareInviteResponse> {
+  const res = await fetch(`${BASE}/api/invites/share`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ invite_id, payload }),
+  });
+  if (!res.ok) throw new Error(`share failed: ${res.status}`);
+  return res.json();
+}
+
+export async function getSharedInvite(share_id: string): Promise<{
+  invite_id: string;
+  payload: any;
+}> {
+  const res = await fetch(
+    `${BASE}/api/invites/share/${encodeURIComponent(share_id)}`,
+  );
+  if (!res.ok) throw new Error(`get share failed: ${res.status}`);
+  return res.json();
+}

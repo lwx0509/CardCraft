@@ -91,6 +91,22 @@ class PaymentStatusResponse(BaseModel):
     session_id: Optional[str] = None
 
 
+# ---------- Share Models ----------
+class ShareInviteRequest(BaseModel):
+    invite_id: str
+    payload: dict  # arbitrary invite JSON (positions, background, etc.)
+
+
+class ShareInviteResponse(BaseModel):
+    share_id: str
+    url: str
+
+
+class GetInviteResponse(BaseModel):
+    invite_id: str
+    payload: dict
+
+
 # ---------- AI Routes ----------
 @api_router.get("/")
 async def root():
@@ -311,6 +327,37 @@ async def stripe_webhook(request: Request):
         if invite_id:
             await _mark_paid(invite_id, event.session_id or "")
     return {"received": True}
+
+
+app.include_router(api_router)
+@api_router.post("/invites/share", response_model=ShareInviteResponse)
+async def share_invite(req: ShareInviteRequest, request: Request):
+    share_id = req.invite_id or f"inv_{uuid.uuid4().hex[:10]}"
+    await db.shared_invites.update_one(
+        {"share_id": share_id},
+        {
+            "$set": {
+                "share_id": share_id,
+                "payload": req.payload,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+        upsert=True,
+    )
+    # Build absolute URL from the incoming request so the user can paste it
+    origin = str(request.base_url).rstrip("/")
+    # Replace the backend host with the public frontend host (preview ingress
+    # serves frontend at "/" and backend at "/api/*" through the same host).
+    url = f"{origin}/editor?id={share_id}"
+    return ShareInviteResponse(share_id=share_id, url=url)
+
+
+@api_router.get("/invites/share/{share_id}", response_model=GetInviteResponse)
+async def get_shared_invite(share_id: str):
+    doc = await db.shared_invites.find_one({"share_id": share_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    return GetInviteResponse(invite_id=share_id, payload=doc.get("payload", {}))
 
 
 app.include_router(api_router)

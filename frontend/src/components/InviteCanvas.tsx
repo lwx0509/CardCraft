@@ -517,13 +517,10 @@ const styles = StyleSheet.create({
   },
   attributionText: {
     fontFamily: "Manrope_500Medium",
-    fontSize: 10,
-    letterSpacing: 2,
+    fontSize: 8,
+    letterSpacing: 1.5,
     textTransform: "uppercase",
-    opacity: 0.6,
-  },
-});
-000000",
+    color: "#000000",
     opacity: 0.8,
     backgroundColor: "rgba(255,255,255,0.6)",
     paddingHorizontal: 6,
