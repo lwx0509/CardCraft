@@ -167,8 +167,10 @@ function Draggable({
 
   const selfCenterX = -ownSize.w / 2;
   const selfCenterY = -ownSize.h / 2;
-  const pxX = position.x * size.w + selfCenterX;
-  const pxY = position.y * size.h + selfCenterY;
+  // Canvas center as the (0,0) anchor + normalized offset + self-centering so
+  // the element's center lands on the requested position.
+  const pxX = size.w / 2 + position.x * size.w + selfCenterX;
+  const pxY = size.h / 2 + position.y * size.h + selfCenterY;
 
   // Whenever external state changes (and we're not actively dragging), snap to
   // the new computed pixel position so the text stays exactly where it was
@@ -183,16 +185,19 @@ function Draggable({
     PanResponder.create({
       onStartShouldSetPanResponder: () => draggable,
       onStartShouldSetPanResponderCapture: () => draggable,
-      onMoveShouldSetPanResponder: (_e, g) =>
-        draggable && (Math.abs(g.dx) > 1 || Math.abs(g.dy) > 1),
-      onMoveShouldSetPanResponderCapture: (_e, g) =>
-        draggable && (Math.abs(g.dx) > 1 || Math.abs(g.dy) > 1),
+      onMoveShouldSetPanResponder: () => draggable,
+      onMoveShouldSetPanResponderCapture: () => draggable,
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
         draggingRef.current = true;
-        // Capture the current pixel position from the latest props
-        const currX = positionRef.current.x * size.w + selfCenterX;
-        const currY = positionRef.current.y * size.h + selfCenterY;
+        const currX =
+          size.w / 2 +
+          positionRef.current.x * size.w +
+          -ownSize.w / 2;
+        const currY =
+          size.h / 2 +
+          positionRef.current.y * size.h +
+          -ownSize.h / 2;
         startPx.current = { x: currX, y: currY };
         pan.setValue({ x: currX, y: currY });
         onDragStart?.();
@@ -209,13 +214,15 @@ function Draggable({
         const finalPxY = startPx.current.y + g.dy;
         const w = size.w || 1;
         const h = size.h || 1;
+        // Clamp so the element's centre stays roughly within the canvas
+        // (factor in self-centering and an edge buffer so text isn't lost).
         const nx = Math.max(
           -0.45,
-          Math.min(0.45, (finalPxX - selfCenterX) / w),
+          Math.min(0.45, (finalPxX + ownSize.w / 2 - w / 2) / w),
         );
         const ny = Math.max(
           -0.45,
-          Math.min(0.45, (finalPxY - selfCenterY) / h),
+          Math.min(0.45, (finalPxY + ownSize.h / 2 - h / 2) / h),
         );
         // Keep the visual position pinned to where the user dropped it; the
         // committed normalized position will land at the same pixel after the
@@ -360,9 +367,11 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 0,
     left: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     alignItems: "center",
+    minWidth: 60,
+    minHeight: 36,
     // Mouse cursor hint on web only — silently ignored on native
     // @ts-ignore
     cursor: "grab",
