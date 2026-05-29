@@ -329,7 +329,6 @@ async def stripe_webhook(request: Request):
     return {"received": True}
 
 
-app.include_router(api_router)
 @api_router.post("/invites/share", response_model=ShareInviteResponse)
 async def share_invite(req: ShareInviteRequest, request: Request):
     share_id = req.invite_id or f"inv_{uuid.uuid4().hex[:10]}"
