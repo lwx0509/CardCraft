@@ -141,13 +141,14 @@ function Draggable({
   children: React.ReactNode;
   testID?: string;
 }) {
-  // Stored position (committed)
   const stored = useRef(position);
   useEffect(() => {
     stored.current = position;
   }, [position]);
 
-  // Animated value for live drag delta
+  // Own size of this draggable element (measured via onLayout) so we can self-center
+  const [ownSize, setOwnSize] = useState({ w: 0, h: 0 });
+
   const delta = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
 
   const panResponder = useRef(
@@ -178,12 +179,23 @@ function Draggable({
     }),
   ).current;
 
-  const baseX = position.x * size.w;
-  const baseY = position.y * size.h;
+  // Position is anchored to the canvas center (top:50%, left:50%) and the
+  // element self-centers via -ownSize/2 so each wrapper hugs only its own
+  // content — non-overlapping hitboxes between title / message / meta.
+  const selfCenterX = -ownSize.w / 2;
+  const selfCenterY = -ownSize.h / 2;
+  const baseX = position.x * size.w + selfCenterX;
+  const baseY = position.y * size.h + selfCenterY;
 
   return (
     <Animated.View
       {...(draggable ? panResponder.panHandlers : {})}
+      onLayout={(e) =>
+        setOwnSize({
+          w: e.nativeEvent.layout.width,
+          h: e.nativeEvent.layout.height,
+        })
+      }
       style={[
         styles.draggable,
         {
@@ -302,9 +314,17 @@ const styles = StyleSheet.create({
   },
   draggable: {
     position: "absolute",
-    paddingHorizontal: 16,
+    top: "50%",
+    left: "50%",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     alignItems: "center",
     maxWidth: "90%",
+    // Mouse cursor hint on web only — silently ignored on native
+    // @ts-ignore
+    cursor: "grab",
+    // @ts-ignore
+    userSelect: "none",
   },
   title: {
     fontSize: 32,
