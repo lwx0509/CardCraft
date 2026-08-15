@@ -13,7 +13,8 @@
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Pick photos to use as invite backgrounds",
         "NSPhotoLibraryAddUsageDescription": "Save your finished invites to Photos"
-      }
+      },
+      "bundleIdentifier": "com.emergent.cardcraft.x9dnn4"
     },
     "android": {
       "adaptiveIcon": {
@@ -25,7 +26,8 @@
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "READ_MEDIA_IMAGES"
-      ]
+      ],
+      "package": "com.emergent.cardcraft.x9dnn4"
     },
     "web": {
       "bundler": "metro",
